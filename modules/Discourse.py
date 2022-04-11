@@ -23,7 +23,6 @@ class Discourse(nn.Module):
         self.is_main_embedding2 = nn.Linear(1, self.conv2_dim)
         
         self.sentence_fc = nn.Linear(self.conv2_dim, len(vocab._id2label))
-        self.edu_fc = nn.Linear(self.conv2_dim, len(vocab._id2label))
 
     def forward(self, bert_ids, masks, batch_edu_mask, batch_edu_explanatory, edu_lengths, batch_edge, batch_edge_type, batch_is_main):
         bert_ids = bert_ids.cuda()
@@ -53,7 +52,6 @@ class Discourse(nn.Module):
         last_index = last_index.repeat([1, 1, self.conv2_dim])
         last_du_hidden = torch.gather(node_hidden.reshape([batch_size, -1 ,self.conv2_dim]), 1, last_index)
         sentence_logit = self.sentence_fc(last_du_hidden.squeeze(1))
-        self.edu_logit = self.edu_fc(node_hidden)
         return sentence_logit
     
     def  span_extractor(self, word_hidden, batch_edu_mask):
@@ -78,6 +76,4 @@ class Discourse(nn.Module):
         
         sentence_loss = F.cross_entropy(predict_output, gold_label)
         
-        edu_loss = F.cross_entropy(self.edu_logit, self.batch_edu_explanatory.reshape([-1]), ignore_index=-1)
-        
-        return sentence_loss + self.config.alpha * edu_loss
+        return sentence_loss
