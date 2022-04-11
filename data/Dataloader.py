@@ -215,6 +215,7 @@ def discourse_tree(review, vocab):
     if review in discourse_tree.function_map:
         return discourse_tree.function_map[review]
     node = {}
+    edu_node = {}
     edge = []
     edge_relation = []
     is_main_edge = []
@@ -232,6 +233,7 @@ def discourse_tree(review, vocab):
     i = 0
     for child in root.findall(".//EDU"):
         node[child] = (i, child[0].text)
+        edu_node[child] = (i, child[0].text)
         i += 1
     for child in reversed(root.findall(".//RELATION")):
         node[child] = (i, ''.join(i.text for i in child.findall(".//TEXT")))
@@ -251,9 +253,9 @@ def discourse_tree(review, vocab):
         
     if i == 1:
         content = review.context
-    edu_masks = torch.zeros((len(node), len(tokens)), dtype=torch.long, requires_grad=False)
+    edu_masks = torch.zeros((len(edu_node), len(tokens)), dtype=torch.long, requires_grad=False)
     tokens = vocab.tokenize(content)
-    for i,element in node.values():
+    for i,element in edu_node.values():
         element_token = vocab.tokenize(element)
         start = string_match(tokens,element_token)
         edu_masks[i, start:start+len(element_token)] = 1

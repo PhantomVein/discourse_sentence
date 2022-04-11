@@ -12,18 +12,8 @@ class Discourse(nn.Module):
         self.span_att_h1 = nn.Linear(self.config.bert_dims, self.config.span_att_hiddens)
         self.span_att_h2 = nn.Linear(self.config.span_att_hiddens, 1)
         
-        self.conv1_dim = self.config.graph_conv1_dims
-        self.conv2_dim = self.config.graph_conv2_dims
-        self.graph_conv1 = TransformerConv(in_channels=self.config.bert_dims, out_channels=self.conv1_dim//self.config.graph_conv_head, heads=self.config.graph_conv_head, edge_dim=self.conv1_dim)
-        self.graph_conv2 = TransformerConv(in_channels=self.conv1_dim, out_channels=self.conv2_dim//self.config.graph_conv_head, heads=self.config.graph_conv_head , edge_dim=self.conv2_dim)
-        
-        self.relation_embedding1 = nn.Linear(1, self.conv1_dim)
-        self.relation_embedding2 = nn.Linear(1, self.conv2_dim)
-        self.is_main_embedding1 = nn.Linear(1, self.conv1_dim)
-        self.is_main_embedding2 = nn.Linear(1, self.conv2_dim)
-        
-        self.sentence_fc = nn.Linear(self.conv2_dim, len(vocab._id2label))
-        self.edu_fc = nn.Linear(self.conv2_dim, len(vocab._id2label))
+        self.sentence_fc = nn.Linear(self.config.bert_dims, len(vocab._id2label))
+        self.edu_fc = nn.Linear(self.config.bert_dims, len(vocab._id2label))
 
     def forward(self, bert_ids, masks, batch_edu_mask, batch_edu_explanatory, edu_lengths, batch_edge, batch_edge_type, batch_is_main):
         bert_ids = bert_ids.cuda()
@@ -46,12 +36,10 @@ class Discourse(nn.Module):
         edu_embed = F.dropout(edu_hidden, p=self.config.dropout_emb, training=self.training)
         
         node_hidden = edu_embed.reshape(-1, edu_embed.shape[-1])
-        node_hidden = self.graph_conv1(x=node_hidden, edge_index=batch_edge, edge_attr=self.relation_embedding1(batch_edge_type)+self.is_main_embedding1(batch_is_main))
-        node_hidden = self.graph_conv2(x=node_hidden, edge_index=batch_edge, edge_attr=self.relation_embedding2(batch_edge_type)+self.is_main_embedding2(batch_is_main))
         
         last_index = (edu_lengths-1).unsqueeze(1).unsqueeze(2)
-        last_index = last_index.repeat([1, 1, self.conv2_dim])
-        last_du_hidden = torch.gather(node_hidden.reshape([batch_size, -1 ,self.conv2_dim]), 1, last_index)
+        last_index = last_index.repeat([1, 1, self.config.bert_dims])
+        last_du_hidden = torch.gather(node_hidden.reshape([batch_size, -1 ,self.config.bert_dims]), 1, last_index)
         sentence_logit = self.sentence_fc(last_du_hidden.squeeze(1))
         self.edu_logit = self.edu_fc(node_hidden)
         return sentence_logit
