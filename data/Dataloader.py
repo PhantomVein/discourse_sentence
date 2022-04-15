@@ -5,6 +5,7 @@ import collections
 import numpy as np
 import torch
 from itertools import groupby
+import random
 import xml.etree.ElementTree as element_tree
 
 
@@ -214,7 +215,7 @@ def static_vars(**kwargs):
 def discourse_tree(review, vocab):
     if review in discourse_tree.function_map:
         return discourse_tree.function_map[review]
-    node = {}
+    node = []
     edge = []
     edge_relation = []
     is_main_edge = []
@@ -230,30 +231,50 @@ def discourse_tree(review, vocab):
 
     root = element_tree.fromstring(trans_xml)
     i = 0
+    stack = []
     for child in root.findall(".//EDU"):
-        node[child] = (i, child[0].text)
+        node.append((i, child[0].text))
         i += 1
-    for child in reversed(root.findall(".//RELATION")):
-        node[child] = (i, ''.join(i.text for i in child.findall(".//TEXT")))
-        i += 1
-        content = node[child][1]
-    for child in root.findall(".//RELATION"):
-        edge.append([node[child[0]][0], node[child][0] ])
-        edge_relation.append(child.attrib['CTYPE'])
-        edge.append([node[child[1]][0], node[child][0] ])
-        edge_relation.append(child.attrib['CTYPE'])
-        if child.attrib['NUCLEAR'] == 'LEFT':
-            is_main_edge.extend([1, 0])
-        elif  child.attrib['NUCLEAR'] == 'RIGHT':
-            is_main_edge.extend([0, 1])
-        else:
-            is_main_edge.extend([1, 1])
+    
+    type2relation = ['解说类', '转折类', '因果类', '并列类'] 
+    edu_num = len(node)
+    for edu_i in range(edu_num):
+        # reduce
+        while len(stack) >= 2 and random.random()>0.5:
+            right_i, right_edu = stack.pop()
+            left_i, left_edu = stack.pop()
+            stack.append((i, left_edu + right_edu))
+            
+            node.append(stack[-1])
+            edge.append([right_i, i])
+            edge_type = random.randint(0,3) 
+            edge_relation.append(type2relation[edge_type])
+            edge.append([left_i, i])
+            edge_relation.append(type2relation[edge_type])
+            is_main_edge.extend([random.randint(0,1) , random.randint(0,1) ])
+            i += 1
+        # shift
+        stack.append(node[edu_i])
+    # reduce
+    while len(stack) >= 2:
+        right_i, right_edu = stack.pop()
+        left_i, left_edu = stack.pop()
+        stack.append((i, left_edu + right_edu))
         
-    if i == 1:
-        content = review.context
+        node.append(stack[-1])
+        edge.append([right_i, i])
+        edge_type = random.randint(0,3) 
+        edge_relation.append(type2relation[edge_type])
+        edge.append([left_i, i])
+        edge_relation.append(type2relation[edge_type])
+        is_main_edge.extend([random.randint(0,1) , random.randint(0,1) ])
+        i += 1
+        
+
+    content = node[-1][1]
     edu_masks = torch.zeros((len(node), len(tokens)), dtype=torch.long, requires_grad=False)
     tokens = vocab.tokenize(content)
-    for i,element in node.values():
+    for i, element in node:
         element_token = vocab.tokenize(element)
         start = string_match(tokens,element_token)
         edu_masks[i, start:start+len(element_token)] = 1
